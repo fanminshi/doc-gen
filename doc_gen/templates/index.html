@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>doc-gen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .prose h1 { font-size:1.6rem; font-weight:700; margin:1rem 0 .5rem; }
+    .prose h2 { font-size:1.3rem; font-weight:600; margin:1rem 0 .4rem; border-bottom:1px solid #e5e7eb; padding-bottom:.25rem; }
+    .prose h3 { font-size:1.1rem; font-weight:600; margin:.8rem 0 .3rem; }
+    .prose p  { margin:.5rem 0; line-height:1.7; }
+    .prose ul { list-style:disc; padding-left:1.5rem; margin:.5rem 0; }
+    .prose ol { list-style:decimal; padding-left:1.5rem; margin:.5rem 0; }
+    .prose li { margin:.25rem 0; }
+    .prose pre { background:#1e293b; color:#e2e8f0; padding:1rem; border-radius:.5rem; overflow-x:auto; margin:.75rem 0; font-size:.85rem; }
+    .prose code { background:#f1f5f9; color:#0f172a; padding:.1rem .3rem; border-radius:.25rem; font-size:.875em; }
+    .prose pre code { background:transparent; color:inherit; padding:0; }
+    .prose table { width:100%; border-collapse:collapse; margin:.75rem 0; font-size:.9rem; }
+    .prose th { background:#f8fafc; font-weight:600; text-align:left; padding:.5rem .75rem; border:1px solid #e2e8f0; }
+    .prose td { padding:.5rem .75rem; border:1px solid #e2e8f0; }
+    .prose blockquote { border-left:4px solid #6366f1; padding-left:1rem; color:#475569; margin:.75rem 0; font-style:italic; }
+    .prose a { color:#6366f1; text-decoration:underline; }
+    #activity { scrollbar-width:thin; }
+    .tab-btn.active { border-bottom-color:#6366f1; color:#4f46e5; font-weight:600; }
+    .tab-btn { border-bottom:2px solid transparent; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 h-screen flex flex-col">
+
+<!-- Header -->
+<header class="bg-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow">
+  <div class="flex items-center gap-3">
+    <span class="text-xl font-bold tracking-tight">doc-gen</span>
+    <span id="status-badge" class="text-xs bg-indigo-500 px-2 py-0.5 rounded-full">not initialized</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span id="last-commit" class="text-xs text-indigo-200"></span>
+    <a id="wiki-link" href="#" target="_blank"
+       class="hidden text-xs bg-indigo-500 hover:bg-indigo-400 px-3 py-1 rounded-full transition">
+      View GitHub Wiki
+    </a>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+
+    <!-- Project setup -->
+    <div class="p-4 border-b border-gray-200">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Project</p>
+      <input id="repo-path" type="text" placeholder="/path/to/repo"
+        class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        onblur="onRepoBlur()" />
+      <input id="docs-dir" type="text" placeholder="docs dir (default: docs)"
+        class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input id="ext" type="text" placeholder="auto-detecting..."
+        class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <button onclick="initProject()"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded px-3 py-1.5 mb-1 transition">
+        Init Docs
+      </button>
+      <button onclick="initWiki()"
+        class="w-full bg-white hover:bg-gray-50 text-indigo-700 border border-indigo-300 text-sm font-medium rounded px-3 py-1.5 mb-1 transition">
+        Build Wiki
+      </button>
+      <button onclick="pushWiki()" id="push-btn"
+        class="w-full bg-white hover:bg-gray-50 text-gray-500 border border-gray-200 text-sm font-medium rounded px-3 py-1.5 transition hidden">
+        Push to GitHub Wiki
+      </button>
+    </div>
+
+    <!-- Wiki pages -->
+    <div class="flex-1 overflow-y-auto p-4">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Wiki Pages</p>
+      <div id="wiki-list" class="space-y-1"></div>
+    </div>
+
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Tab bar -->
+    <div class="bg-white border-b border-gray-200 px-6 flex gap-6">
+      <button class="tab-btn active py-3 text-sm transition" onclick="switchTab('search', this)">Search</button>
+      <button class="tab-btn py-3 text-sm text-gray-500 transition" onclick="switchTab('wiki', this)">Wiki</button>
+    </div>
+
+    <!-- Search panel -->
+    <div id="panel-search" class="flex-1 flex flex-col overflow-hidden">
+      <div class="bg-white border-b border-gray-200 px-6 py-3 flex gap-2">
+        <input id="search-input" type="text" placeholder="Ask anything about the codebase..."
+          class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          onkeydown="if(event.key==='Enter') runSearch()" />
+        <button onclick="runSearch()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+          Search
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="search-content" class="max-w-4xl mx-auto
+          prose text-gray-400 text-sm">Enter a query above to search across docs and wiki pages.</div>
+      </div>
+    </div>
+
+    <!-- Wiki panel -->
+    <div id="panel-wiki" class="flex-1 flex-col overflow-hidden hidden">
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="wiki-content" class="max-w-4xl mx-auto">
+          <p class="text-gray-400 text-sm">Select a wiki page from the sidebar.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Activity log -->
+  <aside class="w-72 bg-gray-900 text-gray-300 flex flex-col overflow-hidden border-l border-gray-700">
+    <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Activity</span>
+      <button onclick="document.getElementById('activity').innerHTML=''"
+        class="text-xs text-gray-500 hover:text-gray-300">clear</button>
+    </div>
+    <div id="activity" class="flex-1 overflow-y-auto p-4 space-y-1 font-mono text-xs"></div>
+  </aside>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id)
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+const ws = new WebSocket(`ws://${location.host}/ws`)
+ws.onmessage = e => {
+  const msg = JSON.parse(e.data)
+  if (msg.type === 'log') appendActivity(msg.message)
+  if (msg.type === 'refresh') { loadWikiList(); loadStatus() }
+}
+
+function appendActivity(msg) {
+  const el = document.createElement('div')
+  el.className = 'text-green-400'
+  el.textContent = `> ${msg}`
+  $('activity').appendChild(el)
+  $('activity').scrollTop = $('activity').scrollHeight
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  ['search', 'wiki'].forEach(t => {
+    $(`panel-${t}`).classList.toggle('hidden', t !== name)
+    $(`panel-${t}`).classList.toggle('flex', t === name)
+  })
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+}
+
+// ── Status & GitHub info ───────────────────────────────────────────────────
+async function loadStatus() {
+  const r = await fetch('/status').then(r => r.json())
+  if (r.initialized) {
+    $('status-badge').textContent = 'ready'
+    $('status-badge').className = 'text-xs bg-green-500 px-2 py-0.5 rounded-full'
+    $('last-commit').textContent = r.last_commit ? `HEAD: ${r.last_commit.slice(0,8)}` : ''
+    if (r.repo_path) $('repo-path').value = r.repo_path
+    if (r.docs_dir)  $('docs-dir').value  = r.docs_dir
+    loadGithubInfo()
+  }
+}
+
+async function loadGithubInfo() {
+  const info = await fetch('/project/github-info').then(r => r.json())
+  if (info && info.wiki_url) {
+    const link = $('wiki-link')
+    link.href = info.wiki_url
+    link.classList.remove('hidden')
+    $('push-btn').classList.remove('hidden')
+  }
+}
+
+// ── Init project ───────────────────────────────────────────────────────────
+async function initProject() {
+  const repo = $('repo-path').value.trim()
+  const docs = $('docs-dir').value.trim() || 'docs'
+  const ext  = $('ext').value.trim()  || '.go'
+  if (!repo) return alert('Enter a repo path')
+  appendActivity(`Initializing ${repo}...`)
+  const params = new URLSearchParams({ repo_path: repo, docs_dir: docs, ext })
+  await fetch(`/project/init?${params}`, { method: 'POST' })
+  loadStatus()
+}
+
+async function initWiki() {
+  appendActivity('Building wiki...')
+  await fetch('/wiki/init', { method: 'POST' })
+  loadWikiList()
+}
+
+async function pushWiki() {
+  appendActivity('Pushing wiki to GitHub...')
+  $('push-btn').disabled = true
+  const r = await fetch('/project/push-wiki', { method: 'POST' }).then(r => r.json())
+  $('push-btn').disabled = false
+  if (r.error) {
+    appendActivity(`Push failed: ${r.error}`)
+  } else {
+    appendActivity('Wiki pushed to GitHub!')
+    if (r.wiki_url) {
+      const link = $('wiki-link')
+      link.href = r.wiki_url
+      link.classList.remove('hidden')
+    }
+  }
+}
+
+// ── Wiki list ──────────────────────────────────────────────────────────────
+async function loadWikiList() {
+  const { pages } = await fetch('/wiki').then(r => r.json())
+  const el = $('wiki-list')
+  el.innerHTML = ''
+  pages.forEach(p => {
+    const btn = document.createElement('button')
+    btn.className = `w-full text-left text-sm px-2 py-1.5 rounded transition ${
+      p.exists ? 'text-gray-800 hover:bg-indigo-50 hover:text-indigo-700' : 'text-gray-400 cursor-not-allowed'
+    }`
+    btn.textContent = p.title
+    if (p.exists) btn.onclick = () => loadWikiPage(p.path, p.title)
+    el.appendChild(btn)
+  })
+}
+
+async function loadWikiPage(path, title) {
+  const { content, error } = await fetch(`/wiki/${path}`).then(r => r.json())
+  $('wiki-content').innerHTML = error
+    ? `<p class="text-red-500">${error}</p>`
+    : `<h1 class="text-2xl font-bold mb-6">${title}</h1><div class="prose">${marked.parse(content)}</div>`
+  // switch to wiki tab
+  switchTab('wiki', document.querySelectorAll('.tab-btn')[1])
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+async function runSearch() {
+  const query = $('search-input').value.trim()
+  if (!query) return
+  appendActivity(`Searching: ${query}`)
+  $('search-content').innerHTML = '<p class="text-gray-400 text-sm">Searching...</p>'
+  const { results, error } = await fetch(`/search?query=${encodeURIComponent(query)}`).then(r => r.json())
+  if (error) { $('search-content').innerHTML = `<p class="text-red-500">${error}</p>`; return }
+  if (!results || !results.length) { $('search-content').innerHTML = '<p class="text-gray-500 text-sm">No results found.</p>'; return }
+
+  let html = `<h2 class="text-lg font-semibold mb-4">Results for: <em>${query}</em></h2>`
+  results.forEach(group => {
+    const label = group.source === 'doc-gen-wiki' ? 'Wiki' : 'File Docs'
+    html += `<div class="mb-6">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">${label}</p>`
+    group.answers.forEach(answer => {
+      html += `<div class="bg-white border border-gray-200 rounded-lg p-4 mb-3 prose">${marked.parse(answer)}</div>`
+    })
+    html += '</div>'
+  })
+  $('search-content').innerHTML = html
+}
+
+// ── Language detection ─────────────────────────────────────────────────────
+async function onRepoBlur() {
+  const repo = $('repo-path').value.trim()
+  if (!repo) return
+  const { extensions } = await fetch(`/project/detect?repo_path=${encodeURIComponent(repo)}`).then(r => r.json())
+  if (extensions) {
+    $('ext').value = extensions.join(',')
+    appendActivity(`Detected language: ${extensions.join(', ')}`)
+  }
+  loadGithubInfo()
+}
+
+loadStatus()
+loadWikiList()
+</script>
+</html>
