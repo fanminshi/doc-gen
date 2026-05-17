@@ -12,7 +12,14 @@ import re
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
-from doc_gen import cognee_backend, generator, manifest as manifest_mod, store, wiki as wiki_mod
+from doc_gen import generator, manifest as manifest_mod, store, wiki as wiki_mod
+
+try:
+    from doc_gen import cognee_backend
+    _COGNEE_AVAILABLE = True
+except ImportError:
+    cognee_backend = None  # type: ignore
+    _COGNEE_AVAILABLE = False
 from doc_gen.git import (
     get_changed_files,
     get_commit_diffs,
@@ -162,28 +169,33 @@ def _log(msg: str) -> None:
 
 async def _cognee_ingest_all() -> None:
     """Ingest all current docs and wiki pages into cognee."""
-    docs = Path(_state["docs_dir"])
-    repo_path = _state["repo_path"]
-    manifest_path = _state.get("manifest_path")
+    if not _COGNEE_AVAILABLE:
+        return
+    try:
+        docs = Path(_state["docs_dir"])
+        repo_path = _state["repo_path"]
+        manifest_path = _state.get("manifest_path")
 
-    documented = store.list_docs(docs)
-    if documented:
-        _log(f"Ingesting {len(documented)} file docs into cognee...")
-        file_doc_pairs = [(f, store.read_doc(docs, f)) for f in documented]
-        await asyncio.get_event_loop().run_in_executor(None, cognee_backend.ingest_docs, file_doc_pairs)
-        _log("File docs ingested.")
+        documented = store.list_docs(docs)
+        if documented:
+            _log(f"Ingesting {len(documented)} file docs into cognee...")
+            file_doc_pairs = [(f, store.read_doc(docs, f)) for f in documented]
+            await asyncio.get_event_loop().run_in_executor(None, cognee_backend.ingest_docs, file_doc_pairs)
+            _log("File docs ingested.")
 
-    if manifest_path and Path(manifest_path).exists():
-        pages = manifest_mod.load_manifest(manifest_path)
-        wiki_pairs = []
-        for page in pages:
-            output_key = page.output_path.removesuffix(".md")
-            if store.doc_exists(Path(repo_path), output_key):
-                wiki_pairs.append((page.title, store.read_doc(Path(repo_path), output_key)))
-        if wiki_pairs:
-            _log(f"Ingesting {len(wiki_pairs)} wiki pages into cognee...")
-            await asyncio.get_event_loop().run_in_executor(None, cognee_backend.ingest_wiki_pages, wiki_pairs)
-            _log("Wiki pages ingested.")
+        if manifest_path and Path(manifest_path).exists():
+            pages = manifest_mod.load_manifest(manifest_path)
+            wiki_pairs = []
+            for page in pages:
+                output_key = page.output_path.removesuffix(".md")
+                if store.doc_exists(Path(repo_path), output_key):
+                    wiki_pairs.append((page.title, store.read_doc(Path(repo_path), output_key)))
+            if wiki_pairs:
+                _log(f"Ingesting {len(wiki_pairs)} wiki pages into cognee...")
+                await asyncio.get_event_loop().run_in_executor(None, cognee_backend.ingest_wiki_pages, wiki_pairs)
+                _log("Wiki pages ingested.")
+    except Exception as e:
+        _log(f"Cognee ingestion skipped: {e}")
 
 
 # ── WebSocket manager ────────────────────────────────────────────────────────
@@ -227,7 +239,7 @@ def _latest_commit(repo_path: str) -> str:
 
 async def _watch_commits() -> None:
     while True:
-        await asyncio.sleep(30)
+        await asyncio.sleep(10)
         if not _state["initialized"]:
             continue
         repo_path = _state["repo_path"]
@@ -376,37 +388,119 @@ async def init_wiki(overwrite: bool = False) -> dict:
     return {"status": "started", "pages": len(pages)}
 
 
-@app.post("/search")
+def _local_search(query: str, top_k: int) -> list[dict]:
+    """Keyword search over local wiki pages and file docs."""
+    terms = query.lower().split()
+    repo_path = _state.get("repo_path")
+    docs_dir = _state.get("docs_dir")
+    manifest_path = _state.get("manifest_path")
+    results = []
+
+    def _score(text: str) -> int:
+        low = text.lower()
+        return sum(low.count(t) for t in terms)
+
+    # Search wiki pages
+    if repo_path and manifest_path and Path(manifest_path).exists():
+        pages = manifest_mod.load_manifest(manifest_path)
+        wiki_hits = []
+        for page in pages:
+            output_key = page.output_path.removesuffix(".md")
+            if store.doc_exists(Path(repo_path), output_key):
+                content = store.read_doc(Path(repo_path), output_key)
+                score = _score(content)
+                if score > 0:
+                    # Return first matching paragraph
+                    paras = [p for p in content.split("\n\n") if any(t in p.lower() for t in terms)]
+                    excerpt = paras[0] if paras else content[:500]
+                    wiki_hits.append((score, f"**{page.title}**\n\n{excerpt}"))
+        wiki_hits.sort(key=lambda x: -x[0])
+        if wiki_hits:
+            results.append({"source": "doc-gen-wiki", "answers": [h for _, h in wiki_hits[:top_k]]})
+
+    # Search file docs
+    if docs_dir and Path(docs_dir).exists():
+        doc_hits = []
+        for filepath in store.list_docs(Path(docs_dir)):
+            content = store.read_doc(Path(docs_dir), filepath)
+            score = _score(content)
+            if score > 0:
+                paras = [p for p in content.split("\n\n") if any(t in p.lower() for t in terms)]
+                excerpt = paras[0] if paras else content[:500]
+                doc_hits.append((score, f"**{filepath}**\n\n{excerpt}"))
+        doc_hits.sort(key=lambda x: -x[0])
+        if doc_hits:
+            results.append({"source": "doc-gen-files", "answers": [h for _, h in doc_hits[:top_k]]})
+
+    return results
+
+
+@app.get("/search")
 async def search(query: str, top_k: int = 5) -> dict:
-    loop = asyncio.get_event_loop()
-    results = await loop.run_in_executor(None, cognee_backend.search, query, top_k)
-    return {"results": results}
+    repo_path = _state.get("repo_path", ".")
+    docs_dir = _state.get("docs_dir", "docs")
+    if _COGNEE_AVAILABLE:
+        try:
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(None, cognee_backend.search, query, top_k)
+            if results:
+                return {"results": results}
+        except Exception:
+            pass
+
+    hits = store.local_search(query, repo_path, docs_dir, top_k)
+    if not hits:
+        return {"results": []}
+
+    context = "\n\n---\n\n".join(f"# {r['title']}\n{r['excerpt']}" for r in hits)
+    try:
+        answer = await asyncio.get_event_loop().run_in_executor(
+            None,
+            generator._call,
+            [{"role": "user", "content": (
+                f"You are a technical assistant. Answer the question below using only the "
+                f"documentation provided. Be concise and direct.\n\n"
+                f"Question: {query}\n\n"
+                f"Documentation:\n{context}"
+            )}],
+        )
+        return {"results": [{"source": "local", "answers": [answer]}]}
+    except Exception:
+        return {"results": [{"source": "local", "answers": [r["excerpt"] for r in hits]}]}
 
 
 @app.get("/wiki")
 async def list_wiki() -> dict:
     repo_path = _state.get("repo_path")
     manifest_path = _state.get("manifest_path")
-    if not repo_path or not manifest_path or not Path(manifest_path).exists():
-        return {"pages": []}
-    pages = manifest_mod.load_manifest(manifest_path)
+    docs_dir = _state.get("docs_dir")
     result = []
-    for page in pages:
-        output_key = page.output_path.removesuffix(".md")
-        exists = store.doc_exists(Path(repo_path), output_key)
-        result.append({"title": page.title, "path": page.output_path, "exists": exists})
+
+    if manifest_path and Path(manifest_path).exists():
+        pages = manifest_mod.load_manifest(manifest_path)
+        for page in pages:
+            output_key = page.output_path.removesuffix(".md")
+            exists = store.doc_exists(Path(repo_path), output_key)
+            result.append({"title": page.title, "path": page.output_path, "exists": exists})
+
+    if not any(p["exists"] for p in result) and docs_dir and Path(docs_dir).exists():
+        for filepath in sorted(store.list_docs(Path(docs_dir)))[:50]:
+            result.append({"title": filepath, "path": filepath + ".md", "exists": True})
+
     return {"pages": result}
 
 
 @app.get("/wiki/{page_path:path}")
 async def get_wiki_page(page_path: str) -> dict:
     repo_path = _state.get("repo_path")
-    if not repo_path:
-        return {"error": "Project not initialized"}
+    docs_dir = _state.get("docs_dir")
     output_key = page_path.removesuffix(".md")
-    if not store.doc_exists(Path(repo_path), output_key):
-        return {"error": "Page not found"}
-    return {"content": store.read_doc(Path(repo_path), output_key)}
+
+    if repo_path and store.doc_exists(Path(repo_path), output_key):
+        return {"content": store.read_doc(Path(repo_path), output_key)}
+    if docs_dir and store.doc_exists(Path(docs_dir), output_key):
+        return {"content": store.read_doc(Path(docs_dir), output_key)}
+    return {"error": "Page not found"}
 
 
 @app.get("/status")

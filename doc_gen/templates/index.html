@@ -38,10 +38,10 @@
   </div>
   <div class="flex items-center gap-4">
     <span id="last-commit" class="text-xs text-indigo-200"></span>
-    <a id="wiki-link" href="#" target="_blank"
-       class="hidden text-xs bg-indigo-500 hover:bg-indigo-400 px-3 py-1 rounded-full transition">
-      View GitHub Wiki
-    </a>
+    <button onclick="openWikiTab()"
+       class="text-xs bg-indigo-500 hover:bg-indigo-400 px-3 py-1 rounded-full transition">
+      View Wiki
+    </button>
   </div>
 </header>
 
@@ -53,7 +53,7 @@
     <!-- Project setup -->
     <div class="p-4 border-b border-gray-200">
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Project</p>
-      <input id="repo-path" type="text" placeholder="/path/to/repo"
+      <input id="repo-path" type="text" placeholder="/path/to/repo" value="/tmp/operator-sdk"
         class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
         onblur="onRepoBlur()" />
       <input id="docs-dir" type="text" placeholder="docs dir (default: docs)"
@@ -65,12 +65,8 @@
         Init Docs
       </button>
       <button onclick="initWiki()"
-        class="w-full bg-white hover:bg-gray-50 text-indigo-700 border border-indigo-300 text-sm font-medium rounded px-3 py-1.5 mb-1 transition">
+        class="w-full bg-white hover:bg-gray-50 text-indigo-700 border border-indigo-300 text-sm font-medium rounded px-3 py-1.5 transition">
         Build Wiki
-      </button>
-      <button onclick="pushWiki()" id="push-btn"
-        class="w-full bg-white hover:bg-gray-50 text-gray-500 border border-gray-200 text-sm font-medium rounded px-3 py-1.5 transition hidden">
-        Push to GitHub Wiki
       </button>
     </div>
 
@@ -174,13 +170,15 @@ async function loadStatus() {
 }
 
 async function loadGithubInfo() {
+  // show push button only if GitHub remote exists
   const info = await fetch('/project/github-info').then(r => r.json())
   if (info && info.wiki_url) {
-    const link = $('wiki-link')
-    link.href = info.wiki_url
-    link.classList.remove('hidden')
     $('push-btn').classList.remove('hidden')
   }
+}
+
+function openWikiTab() {
+  switchTab('wiki', document.querySelectorAll('.tab-btn')[1])
 }
 
 // ── Init project ───────────────────────────────────────────────────────────
@@ -210,11 +208,6 @@ async function pushWiki() {
     appendActivity(`Push failed: ${r.error}`)
   } else {
     appendActivity('Wiki pushed to GitHub!')
-    if (r.wiki_url) {
-      const link = $('wiki-link')
-      link.href = r.wiki_url
-      link.classList.remove('hidden')
-    }
   }
 }
 

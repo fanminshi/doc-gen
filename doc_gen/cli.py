@@ -146,12 +146,35 @@ def rehash(repo_path: str, docs_dir: str, ref: str) -> None:
         click.echo(f"  hashed  {filepath}")
 
     click.echo("\nDone.")
-    """Print the current documentation for FILEPATH."""
+
+
+@cli.command()
+@click.argument("filepath")
+@click.option("--docs-dir", default=DEFAULT_DOCS_DIR, show_default=True, help="Docs directory")
+def show(filepath: str, docs_dir: str) -> None:
+    """Print the documentation for FILEPATH."""
     docs = Path(docs_dir)
     if not store.doc_exists(docs, filepath):
         click.echo(f"No documentation found for {filepath}. Run `doc-gen init` first.")
         raise SystemExit(1)
     click.echo(store.read_doc(docs, filepath))
+
+
+def _local_search(term: str, repo_path: str, docs_dir: str, top_k: int) -> str:
+    results = store.local_search(term, repo_path, docs_dir, top_k)
+    if not results:
+        return f"No relevant documentation found for '{term}'."
+    return "\n\n---\n\n".join(f"**{r['title']}**\n\n{r['excerpt']}" for r in results)
+
+
+@cli.command()
+@click.argument("term")
+@click.argument("repo_path", default=".")
+@click.option("--docs-dir", default=DEFAULT_DOCS_DIR, show_default=True, help="Docs directory")
+@click.option("--top-k", default=5, show_default=True, help="Number of docs to retrieve")
+def query(term: str, repo_path: str, docs_dir: str, top_k: int) -> None:
+    """Answer a question from the wiki pages, falling back to per-file docs."""
+    click.echo(_local_search(term, repo_path, docs_dir, top_k))
 
 
 @cli.command()
