@@ -13,6 +13,12 @@ if "LLM_API_KEY" not in os.environ and "OPENAI_API_KEY" in os.environ:
 if "LLM_MODEL" not in os.environ:
     os.environ["LLM_MODEL"] = "gpt-5.4-mini-2026-03-17"
 
+# Use local fastembed for embeddings — no API key or external endpoint needed
+if "EMBEDDING_PROVIDER" not in os.environ:
+    os.environ["EMBEDDING_PROVIDER"] = "fastembed"
+if "EMBEDDING_MODEL" not in os.environ:
+    os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
+
 import cognee
 from cognee import SearchType
 
