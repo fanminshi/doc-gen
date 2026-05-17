@@ -76,6 +76,8 @@ def init(repo_path: str, docs_dir: str, ext: tuple[str, ...], overwrite: bool, r
         doc = generator.generate_base_doc(filepath, content)
         store.write_doc(docs, filepath, doc, source_hash=store.content_hash(content))
 
+    repo = open_repo(repo_path)
+    store.write_version(docs, repo_path, repo.head.commit.hexsha, ref=ref)
     click.echo(f"\nDone. Docs written to {docs}/")
 
 
