@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>doc-gen | Incremental LLM Documentation</title>
+    <meta
+      name="description"
+      content="doc-gen turns git history into living file docs, architecture wiki pages, and searchable answers for fast-moving engineering teams."
+    />
+    <meta name="theme-color" content="#101615" />
+    <meta property="og:title" content="doc-gen | Documentation that keeps up with commits" />
+    <meta
+      property="og:description"
+      content="Incremental LLM-powered documentation and wiki generation from git history."
+    />
+    <meta property="og:image" content="./assets/doc-gen-interface.jpg" />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="doc-gen home">
+        <span class="brand-mark" aria-hidden="true">dg</span>
+        <span>doc-gen</span>
+      </a>
+      <nav class="nav-links" aria-label="Page sections">
+        <a href="#flow">Flow</a>
+        <a href="#demo">Demo</a>
+        <a href="#scope">Scope</a>
+      </nav>
+      <a class="icon-link" id="repo-link" href="#" aria-label="Open repository">
+        <i data-lucide="external-link" aria-hidden="true"></i>
+        <span>Repository</span>
+      </a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <img class="hero-image" src="./assets/doc-gen-interface.jpg" alt="" aria-hidden="true" />
+        <div class="hero-scrim" aria-hidden="true"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Hackathon build kit for codebase knowledge</p>
+          <h1 id="hero-title">doc-gen</h1>
+          <p class="hero-copy">
+            Incremental LLM-powered documentation from git history. Create per-file markdown for
+            selected source files, patch existing docs from commit diffs, then synthesize a wiki your
+            team can query.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#demo">
+              <i data-lucide="terminal" aria-hidden="true"></i>
+              <span>Try the CLI</span>
+            </a>
+            <a class="button button-secondary" href="#flow">
+              <i data-lucide="git-branch" aria-hidden="true"></i>
+              <span>See the flow</span>
+            </a>
+          </div>
+          <dl class="hero-metrics" aria-label="Project highlights">
+            <div>
+              <dt>Diff-only</dt>
+              <dd>Updates</dd>
+            </div>
+            <div>
+              <dt>FastAPI</dt>
+              <dd>Web UI</dd>
+            </div>
+            <div>
+              <dt>Cognee</dt>
+              <dd>Optional graph</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section intro-section" aria-labelledby="intro-title">
+        <div class="section-heading">
+          <p class="eyebrow">What it solves</p>
+          <h2 id="intro-title">A documentation loop that does not reset every sprint.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <i data-lucide="file-text" aria-hidden="true"></i>
+            <h3>Generate file docs from source</h3>
+            <p>
+              Point <code>doc-gen init</code> at a repository and it creates markdown docs for each selected
+              tracked source file with content hashes for cheap future skips.
+            </p>
+          </article>
+          <article class="feature-card">
+            <i data-lucide="git-compare-arrows" aria-hidden="true"></i>
+            <h3>Patch docs from commits</h3>
+            <p>
+              Feed a commit SHA into <code>doc-gen update</code>. Existing docs update from unified diffs;
+              new files fall back to full-file generation.
+            </p>
+          </article>
+          <article class="feature-card">
+            <i data-lucide="search-check" aria-hidden="true"></i>
+            <h3>Ask the generated wiki</h3>
+            <p>
+              Build wiki pages from a manifest, search local markdown, or enable Cognee for semantic
+              graph search and impact analysis.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section flow-section" id="flow" aria-labelledby="flow-title">
+        <div class="section-heading">
+          <p class="eyebrow">System flow</p>
+          <h2 id="flow-title">From commit history to searchable project memory.</h2>
+        </div>
+        <div class="flow-grid" aria-label="doc-gen workflow">
+          <article class="flow-step">
+            <span>01</span>
+            <h3>Read git</h3>
+            <p>List files, load content at refs, and collect commit diffs with GitPython helpers.</p>
+          </article>
+          <article class="flow-step">
+            <span>02</span>
+            <h3>Write file docs</h3>
+            <p>Generate markdown files and stamp each page with a hash of the source content.</p>
+          </article>
+          <article class="flow-step">
+            <span>03</span>
+            <h3>Synthesize wiki</h3>
+            <p>Resolve <code>wiki.yaml</code> globs and compose focused pages with optional Mermaid diagrams.</p>
+          </article>
+          <article class="flow-step">
+            <span>04</span>
+            <h3>Search answers</h3>
+            <p>Search wiki pages first, fall back to file docs, and optionally use Cognee results.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section demo-section" id="demo" aria-labelledby="demo-title">
+        <div class="demo-copy">
+          <p class="eyebrow">Local demo</p>
+          <h2 id="demo-title">A tiny command sequence for a live demo.</h2>
+          <p>
+            The core path is intentionally short: initialize docs, update them from a commit, generate
+            a manifest-backed wiki, then ask a question. The FastAPI app exposes project init, wiki init,
+            search, wiki browsing, and a live activity log.
+          </p>
+        </div>
+        <div class="code-panel">
+          <div class="code-toolbar">
+            <span>demo.sh</span>
+            <button class="copy-button" data-copy="#demo-code" type="button">
+              <i data-lucide="copy" aria-hidden="true"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre id="demo-code"><code>doc-gen init /path/to/repo --ext .py --docs-dir docs
+doc-gen update /path/to/repo &lt;commit-sha&gt; --ext .py --docs-dir docs
+doc-gen wiki-init /path/to/repo --docs-dir docs
+doc-gen query "how does the update flow work?" /path/to/repo --docs-dir docs
+uvicorn doc_gen.server:app --reload</code></pre>
+        </div>
+      </section>
+
+      <section class="section build-section" aria-labelledby="build-title">
+        <div class="section-heading">
+          <p class="eyebrow">Built from the repository</p>
+          <h2 id="build-title">The page mirrors the code that exists today.</h2>
+        </div>
+        <div class="module-list">
+          <article>
+            <h3><code>cli.py</code></h3>
+            <p>Commands for init, update, replay, wiki generation, query, and Cognee ingestion.</p>
+          </article>
+          <article>
+            <h3><code>store.py</code></h3>
+            <p>Markdown persistence, frontmatter hashes, and local keyword search.</p>
+          </article>
+          <article>
+            <h3><code>server.py</code></h3>
+            <p>FastAPI routes, WebSocket activity, language detection, search, and wiki browsing endpoints.</p>
+          </article>
+          <article>
+            <h3><code>wiki.py</code></h3>
+            <p>Professional wiki page prompts, quick starts, and incremental wiki patching.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section scope-section" id="scope" aria-labelledby="scope-title">
+        <div>
+          <p class="eyebrow">Output</p>
+          <h2 id="scope-title">Markdown docs that are ready for your repo wiki.</h2>
+          <p>
+            The product writes markdown documentation and manifest-driven wiki pages for your repository.
+            Teams can browse generated pages in the local web UI, search across project knowledge, and
+            move the markdown output into the documentation surface they already use.
+          </p>
+        </div>
+        <a class="button button-primary" href="#demo" aria-label="Jump to demo commands">
+          <i data-lucide="list-checks" aria-hidden="true"></i>
+          <span>Review demo path</span>
+        </a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>doc-gen</span>
+      <span>Incremental docs for fast-moving code.</span>
+      <span id="year"></span>
+    </footer>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
