@@ -3,9 +3,52 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 _FRONTMATTER_SEP = "---"
+_VERSION_FILE = ".doc-gen-version.json"
+
+
+def content_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def write_version(docs_dir: Path, repo_path: str, commit_sha: str, ref: str = "HEAD") -> None:
+    """Stamp the docs dir with the commit the wiki was generated from."""
+    import subprocess
+    info: dict = {
+        "commit": commit_sha,
+        "ref": ref,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        url = subprocess.check_output(
+            ["git", "-C", repo_path, "remote", "get-url", "origin"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        info["repo_url"] = url
+        tag = subprocess.check_output(
+            ["git", "-C", repo_path, "describe", "--tags", "--exact-match", commit_sha],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        info["tag"] = tag
+    except Exception:
+        pass
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / _VERSION_FILE).write_text(json.dumps(info, indent=2))
+
+
+def read_version(docs_dir: Path) -> dict | None:
+    """Return version info stamped on this docs dir, or None."""
+    path = docs_dir / _VERSION_FILE
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
 
 
 def content_hash(text: str) -> str:

@@ -452,6 +452,18 @@ async def search(query: str, top_k: int = 5) -> dict:
     if not hits:
         return {"results": []}
 
+    github_info = _get_github_info(repo_path)
+    sources = []
+    for r in hits:
+        title = r["title"]
+        is_wiki = not title.startswith("src/")
+        if is_wiki:
+            sources.append({"label": title, "wiki_path": f"wiki/{title.lower().replace(' ', '-')}.md"})
+        elif github_info:
+            sources.append({"label": title, "url": f"https://github.com/{github_info['owner']}/{github_info['repo']}/blob/unstable/{title}"})
+        else:
+            sources.append({"label": title})
+
     context = "\n\n---\n\n".join(f"# {r['title']}\n{r['excerpt']}" for r in hits)
     try:
         answer = await asyncio.get_event_loop().run_in_executor(
@@ -459,14 +471,22 @@ async def search(query: str, top_k: int = 5) -> dict:
             generator._call,
             [{"role": "user", "content": (
                 f"You are a technical assistant. Answer the question below using only the "
-                f"documentation provided. Be concise and direct.\n\n"
+                f"documentation provided. Be concise and direct. Use markdown formatting.\n\n"
                 f"Question: {query}\n\n"
                 f"Documentation:\n{context}"
             )}],
         )
-        return {"results": [{"source": "local", "answers": [answer]}]}
+        return {"results": [{"source": "local", "answers": [answer], "sources": sources}]}
     except Exception:
         return {"results": [{"source": "local", "answers": [r["excerpt"] for r in hits]}]}
+
+
+@app.get("/version")
+async def version() -> dict:
+    docs_dir = _state.get("docs_dir")
+    if not docs_dir:
+        return {}
+    return store.read_version(Path(docs_dir)) or {}
 
 
 @app.get("/wiki")
